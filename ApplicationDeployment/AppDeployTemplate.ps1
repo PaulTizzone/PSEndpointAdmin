@@ -1,57 +1,49 @@
-<#
-    FOR TESTING (AI Gen response / instructions, to be confirmed and implemented)
-$array = @(
-    [PSCustomObject]@{
-        Name = "Object 1"
-        Value = 10
-    },
-    [PSCustomObject]@{
-        Name = "Object 2"
-        Value = 20
-    }
-)
-$array
-#>
 param (
-    [switch]$Force,
     [switch]$ReportOnly,
     [switch]$IfNotInstalled,
+    [switch]$Force,
+    [switch]$Reinstall,
     [switch]$Uninstall
 )
 
+$WorkingDir = "C:\Temp\Deployment";
+
+# Installers, or files to run (such as .sfx and other extractors) are executed in order of first to last.
+# If you are extracting an executable file, place the self extractor first, then place the execution after (you only need to specify local location)
+# Change the value to $null for values you are not using (optional values). Sample values have already been pre-filled.
 $Installers = @(
     [PSCustomObject]@{
-        AppName         = "" # Name of the Application to install.
-        SourceURL       = "" # Source URL to download the application from.
-        SourceHash      = "" # MD5 hash for the downloaded file.
-        InstallSwitch   = "" # Switches for the installer file.
-    }<#,
-    #>
-);
-
-$AdditionalFiles = @(
-    [PSCustomObject]@{
-
+        AppName             = "Sample Application" # Name of the Application to install. (optional)
+        SourceURL           = "https://download.path/file.exe" # Source URL to download the application from. (optional)
+        SourceHash          = "" # MD5 hash for the downloaded file. (optional)
+        FileDest            = "$WorkingDir\file.exe" # Location to download the file to.
+        InstallSwitch       = "/qn /norestart" # Switches for the installer file. (required)
+        InstallValidation   = "C:\Program Files\Path\To.exe" # Location to check for when done downloading file. (optional) [Also checks Version]
+        $Version            = [version]::Parse("1.0.0.0"); # Windows .exe file version. (optional)
     }
 );
 
+# Additional files will be downloaded first, useful for configuration files or multi-part compressed files.
+$AdditionalFiles = @(
+    [PSCustomObject]@{
+        SourceURL   = "" # Source URL to download the file from. (optional)
+        SourceHash  = "" # MD5 hash for the downloaded file. (optional)
+        FileDest    = "" # 
+    }
+);
 
-$AppName = ""; # Enter the name of the application (for logging, has no impact on deployment).
-$AppVersion = [version]::Parse("1.0.0.0"); # Enter the version number of the application (as expected on the file).
-$AppSource = ""; # Enter the URL to download the installer from.
-$AppSourceHash = ""; # Enter the MD5 hash for the downloaded file (for validation, NOT REQUIRED).
-$AppInstallSwitches = "/qn /norestart"; # Application install switches, default for MSIs as "/qn /norestart"
-$AppInstallValidation = ""; # Enter the path for file to test for to confirm installation (& version number checking).
+$AdditionalCleanup = @(); # Add a list of strings with full file path to remove files after installation is complete (you can also add directories, will remove recursively with force).
+
+function Uninstall-Application {
+    # Enter uninstall commands here.
+}
 
 
 
-
-
-
-
-
-
-
+##########################################################################
+####################        SCRIPT BEGINS HERE        ####################
+##########################################################################
+# You should not have to modify anything below this line unless making specific customisations.
 function Get-Installed {
     param ([string]$FilePath);
     if ($null -eq $FilePath) {
@@ -75,9 +67,9 @@ function Get-InstalledVersion {
 }
 
 
-function Get-InstallerIsNewer {
-    param ([version]$InstalledVersion);
-    if (($AppVersion -ne "") -or ($null -ne $null) -and $null -ne $InstalledVersion) {
+function Test-InstallerIsNewer {
+    param ([version]$InstalledVersion, [version]$AppVersion);
+    if (($AppVersion -ne "") -or ($null -ne $AppVersion) -and $null -ne $InstalledVersion) {
         if ($AppVersion -gt $InstalledVersion) {
             return $true;
         }
@@ -86,11 +78,13 @@ function Get-InstallerIsNewer {
 }
 
 
-function Confirm-FileHash {
+function Test-FileHash {
     param (
         [string]$FilePath,
         [string]$ExpectedHash
     );
+    $LocalHash = Get-FileHash -Algorithm MD5 "$FilePath";
+    return ($LocalHash -eq $ExpectedHash);
 }
 
 
@@ -98,8 +92,7 @@ function Get-FileFromURL {
     param (
         [string]$DownloadURL,
         [string]$DownloadHash,
-        [string]$DownloadDest,
-        [pscredential]$Credentials
+        [string]$DownloadDest
     );
 
     if (($null -eq $DownloadURL) -or ($null -eq $DownloadDest)) {
