@@ -47,13 +47,15 @@ function Uninstall-Application {
 function Get-Installed {
     param ([string]$FilePath);
     if ($null -eq $FilePath) {
+        Write-Output "File path not specified!."
         return $null;
     }
-
+    Write-Output "Searching for $FilePath...";
     if (Test-Path -Path "$FilePath") {
+        Write-Output "Found $FilePath.";
         return Get-Item -Path "$FilePath";
     }
-
+    Write-Output "$FilePath not found!";
     return $null;
 }
 
@@ -61,8 +63,10 @@ function Get-Installed {
 function Get-InstalledVersion {
     param ([FileInfo]$FileInfo);
     if ($null -ne $FileInfo) {
+        Write-Output "Checking installed version...";
         return $FileInfo.VersionInfo.FileVersionRaw;
     }
+    Write-Output "Installed version file not found.";
     return $null;
 }
 
@@ -70,10 +74,17 @@ function Get-InstalledVersion {
 function Test-InstallerIsNewer {
     param ([version]$InstalledVersion, [version]$AppVersion);
     if (($AppVersion -ne "") -or ($null -ne $AppVersion) -and $null -ne $InstalledVersion) {
+        Write-Output "Comparing new installer against installed file.";
         if ($AppVersion -gt $InstalledVersion) {
+            Write-Output "Installer is a newer version.";
             return $true;
         }
+        else {
+            Write-Output "Installer is an older, or the same version.";
+            return $false;
+        }
     }
+    Write-Output "Comparison not specified.";
     return $false;
 }
 
@@ -97,6 +108,12 @@ function Get-FileFromURL {
 
     if (($null -eq $DownloadURL) -or ($null -eq $DownloadDest)) {
         Invoke-WebRequest -Uri "$DownloadURL" -OutFile "$DownloadDest";
-        #SEE EXAMPLE 8 ON https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/invoke-webrequest?view=powershell-7.5
+        if (Test-FileHash -FilePath "$DownloadDest" -ExpectedHash "$DownloadHash") { return $true; }
+        else { return $false; }
     }
+}
+
+### LOGIC BEGIN
+if ($ReportOnly) {
+
 }
