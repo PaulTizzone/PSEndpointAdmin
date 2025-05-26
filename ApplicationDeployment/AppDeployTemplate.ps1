@@ -12,6 +12,28 @@ $array = @(
 )
 $array
 #>
+param (
+    [switch]$Force,
+    [switch]$ReportOnly,
+    [switch]$IfNotInstalled,
+    [switch]$Uninstall
+)
+
+$Installers = @(
+    [PSCustomObject]@{
+        AppName         = "" # Name of the Application to install.
+        SourceURL       = "" # Source URL to download the application from.
+        SourceHash      = "" # MD5 hash for the downloaded file.
+        InstallSwitch   = "" # Switches for the installer file.
+    }<#,
+    #>
+);
+
+$AdditionalFiles = @(
+    [PSCustomObject]@{
+
+    }
+);
 
 
 $AppName = ""; # Enter the name of the application (for logging, has no impact on deployment).
@@ -24,13 +46,7 @@ $AppInstallValidation = ""; # Enter the path for file to test for to confirm ins
 
 
 
-param (
-    [switch]$Force,
-    [switch]$ReportOnly,
-    [switch]$IfNotInstalled,
-    [string]$Username,
-    [string]$Password
-)
+
 
 
 
