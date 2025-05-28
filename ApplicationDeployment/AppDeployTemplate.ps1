@@ -4,7 +4,7 @@ param (
     [switch]$Force,
     [switch]$Reinstall,
     [switch]$Uninstall
-)
+);
 
 $WorkingDir = "C:\Temp\Deployment";
 
@@ -35,7 +35,27 @@ $AdditionalFiles = @(
 $AdditionalCleanup = @(); # Add a list of strings with full file path to remove files after installation is complete (you can also add directories, will remove recursively with force).
 
 function Uninstall-Application {
-    # Enter uninstall commands here.
+    # Enter uninstall commands here. You can either specify the custom file and args, or search registry for the "QuietUninstallString" value if you specify part of (or the entire) name.
+    $CustomUninstallFile = $null; # If you know the custom uninstall .exe file, enter it here, otherwise enter msiexec
+    $CustomUninstallArgs = $null; # If you know the silent uninstall args, enter them here.
+    $UninstallValidation = "C:\Prgram Files\Path\To\File.exe"; # Specify the file to check for when uninstalling.
+    $SearchDisplayName = ""; # Search the registry for the display name (checks 32-bit and 64-bit). Can use wildcards.
+
+    if (($null -ne $CustomUninstallFile) -and ($null -ne $CustomUninstallArgs)) {
+        Start-Process $CustomUninstallFile -ArgumentList $CustomUninstallArgs;
+    }
+    else {
+        Get-ItemProperty -Path "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*" | Select-Object DisplayName,QuietUninstallString,UninstallString | Where-Object {$_.DisplayName -like "$SearchDisplayName" };
+    }
+
+    if ($null -eq (Get-Installed -FilePath $UninstallValidation)) {
+        Write-Output "Successfully uninstalled.";
+        exit 0;
+    }
+    else {
+        Write-Output "Failed to uninstall!";
+        exit 1;
+    }
 }
 
 
@@ -115,5 +135,20 @@ function Get-FileFromURL {
 
 ### LOGIC BEGIN
 if ($ReportOnly) {
+    foreach ($Installer in $Installers) {
+        if (Get-Installed -FilePath $Installer.InstallValidation) {
+            $AppNameIs = $Installer.AppName;
+            # ADD VERSION CHECK
+            Write-Output "$AppNameIs is already installed as version ";
+        }
+    }
+    exit 0;
+}
+
+if ($Uninstall) {
+    Uninstall-Application;
+}
+
+if ($Reinstall) {
 
 }
