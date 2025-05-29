@@ -20,6 +20,7 @@ $Installers = @(
         InstallSwitch       = "/qn /norestart" # Switches for the installer file. (required)
         InstallValidation   = "C:\Program Files\Path\To.exe" # Location to check for when done downloading file. (optional) [Also checks Version]
         $Version            = [version]::Parse("1.0.0.0"); # Windows .exe file version. (optional)
+        $UninstallString    = ''; # Enter the Uninstall String (enter just the uninstall GUID for MSIs, or the full path and switches for executable)
     }
 );
 
