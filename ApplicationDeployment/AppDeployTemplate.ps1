@@ -13,23 +13,22 @@ $WorkingDir = "C:\Temp\Deployment";
 # Change the value to $null for values you are not using (optional values). Sample values have already been pre-filled.
 $Installers = @(
     [PSCustomObject]@{
-        AppName             = "Sample Application" # Name of the Application to install. (optional)
-        SourceURL           = "https://download.path/file.exe" # Source URL to download the application from. (optional)
-        SourceHash          = "" # MD5 hash for the downloaded file. (optional)
-        FileDest            = "$WorkingDir\file.exe" # Location to download the file to.
-        InstallSwitch       = "/qn /norestart" # Switches for the installer file. (required)
-        InstallValidation   = "C:\Program Files\Path\To.exe" # Location to check for when done downloading file. (optional) [Also checks Version]
+        AppName             = "Sample Application"; # Name of the Application to install. (optional)
+        SourceURL           = "https://download.path/file.exe"; # Source URL to download the application from. (optional)
+        SourceHash          = "00000000000000000000000000000000"; # MD5 hash for the downloaded file. (optional)
+        FileDest            = "$WorkingDir\file.exe"; # Location to download the file to and what file to run (required)
+        InstallSwitch       = "/qn /norestart"; # Switches for the installer file. (required)
+        InstallValidation   = "C:\Program Files\Path\To.exe"; # Location to check for when done downloading file. (optional) [Also checks Version if specified]
         $Version            = [version]::Parse("1.0.0.0"); # Windows .exe file version. (optional)
-        $UninstallString    = ''; # Enter the Uninstall String (enter just the uninstall GUID for MSIs, or the full path and switches for executable)
     }
 );
 
 # Additional files will be downloaded first, useful for configuration files or multi-part compressed files.
 $AdditionalFiles = @(
     [PSCustomObject]@{
-        SourceURL   = "" # Source URL to download the file from. (optional)
-        SourceHash  = "" # MD5 hash for the downloaded file. (optional)
-        FileDest    = "" # 
+        SourceURL   = "https://download.path/file.exe"; # Source URL to download the file from. (optional)
+        SourceHash  = "00000000000000000000000000000000"; # MD5 hash for the downloaded file. (optional)
+        FileDest    = "$WorkingDir\file.exe"; # 
     }
 );
 
@@ -37,7 +36,7 @@ $AdditionalCleanup = @(); # Add a list of strings with full file path to remove 
 
 function Uninstall-Application {
     # Enter uninstall commands here. You can either specify the custom file and args, or search registry for the "QuietUninstallString" value if you specify part of (or the entire) name.
-    $CustomUninstallFile = $null; # If you know the custom uninstall .exe file, enter it here, otherwise enter msiexec
+    <#$CustomUninstallFile = $null; # If you know the custom uninstall .exe file, enter it here, otherwise enter msiexec
     $CustomUninstallArgs = $null; # If you know the silent uninstall args, enter them here.
     $UninstallValidation = "C:\Prgram Files\Path\To\File.exe"; # Specify the file to check for when uninstalling.
     $SearchDisplayName = ""; # Search the registry for the display name (checks 32-bit and 64-bit). Can use wildcards.
@@ -51,12 +50,11 @@ function Uninstall-Application {
 
     if ($null -eq (Get-Installed -FilePath $UninstallValidation)) {
         Write-Output "Successfully uninstalled.";
-        exit 0;
     }
     else {
         Write-Output "Failed to uninstall!";
         exit 1;
-    }
+    }#>
 }
 
 
@@ -65,6 +63,16 @@ function Uninstall-Application {
 ####################        SCRIPT BEGINS HERE        ####################
 ##########################################################################
 # You should not have to modify anything below this line unless making specific customisations.
+function Start-Environment {
+    if (-not (Test-Path "$WorkingDir")) {
+        Write-Output "Working Directory not found, creating $WorkingDir";
+        New-Item -ItemType Directory -Path "$WorkingDir" -Force;
+    }
+    $env:temp = "$WorkingDir";
+    Set-Location -Path "$WorkingDir";
+    Write-Output "Now working out of $WorkingDir";
+}
+
 function Get-Installed {
     param ([string]$FilePath);
     if ($null -eq $FilePath) {
@@ -94,7 +102,7 @@ function Get-InstalledVersion {
 
 function Test-InstallerIsNewer {
     param ([version]$InstalledVersion, [version]$AppVersion);
-    if (($AppVersion -ne "") -or ($null -ne $AppVersion) -and $null -ne $InstalledVersion) {
+    if (($AppVersion -ne "") -or ($null -ne $AppVersion) -and ($null -ne $InstalledVersion)) {
         Write-Output "Comparing new installer against installed file.";
         if ($AppVersion -gt $InstalledVersion) {
             Write-Output "Installer is a newer version.";
@@ -134,22 +142,53 @@ function Get-FileFromURL {
     }
 }
 
+function Install-Application {
+    param(
+        [string]$FilePath,
+        [string]$FileSwitches
+    )
+    if ($FilePath -like "*.exe") {
+        Write-Output "File is an .exe installer. Proceeding with direct execution...";
+        Start-Process -FilePath "$FilePath" -ArgumentList "$FileSwitches";
+        Get-Process ($FilePath.Split("\")[-1].Replace(".exe","")) | Wait-Process;
+    }
+    elseif ($FilePath -like "*.msi") {
+        Write-Output "File is an .msi installer. Proceeding with msiexec execution...";
+        Start-Process msiexec -ArgumentList "/i `"$FilePath`" $FileSwitches" -Wait;
+    }
+    else {
+        Write-Output "Unknown installer type.";
+    }
+}
+
 ### LOGIC BEGIN
 if ($ReportOnly) {
     foreach ($Installer in $Installers) {
         if (Get-Installed -FilePath $Installer.InstallValidation) {
             $AppNameIs = $Installer.AppName;
-            # ADD VERSION CHECK
+            $InstalledVersionIs = Get-InstalledVersion -FileInfo 
             Write-Output "$AppNameIs is already installed as version ";
         }
     }
     exit 0;
 }
 
+# If the command is to simply uninstall, run uninstaller then exit.
 if ($Uninstall) {
+    Uninstall-Application;
+    if (-not $Reinstall) {
+        exit 0;
+    }
+}
+
+# If the command is to re-install, run the uninstaller first then continue.
+if ($Reinstall) {
     Uninstall-Application;
 }
 
-if ($Reinstall) {
+
+# LOGIC BEGIN
+# Check if applications are installed before doing anything.
+foreach ($Installer in $Installers) {
 
 }
