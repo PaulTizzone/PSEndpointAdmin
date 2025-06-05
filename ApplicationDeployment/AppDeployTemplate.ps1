@@ -37,13 +37,13 @@ $WorkingDir = "C:\Temp\Deployment"; # Specify the temporary / working directory.
 # Change the value to $null for values you are not using (optional values). Sample values have already been pre-filled.
 $Installers = @(
     [PSCustomObject]@{
-        AppName             = "Sample Application" # Name of the Application to install. (optional)
-        SourceURL           = "https://download.path/file.exe" # Source URL to download the application from. (optional)
-        SourceHash          = "00000000000000000000000000000000" # MD5 hash for the downloaded file. (optional)
+        AppName             = "Sample Application" # Name of the Application to install. (optional - set to $null if not using)
+        SourceURL           = "https://download.path/file.exe" # Source URL to download the application from. (optional - set to $null if not using)
+        SourceHash          = "00000000000000000000000000000000" # MD5 hash for the downloaded file. (optional - set to $null if not using)
         FileDest            = "file.exe" # Location to download the file to and what file to run (required) [relative to WorkingDir]
         InstallSwitch       = "/qn /norestart" # Switches for the installer file. (required)
-        InstallValidation   = "C:\Program Files\Path\To.exe" # Location to check for when done downloading file. (optional) [Also checks Version if specified]
-        $Version            = [version]::Parse("1.0.0.0") # Windows .exe file version. (optional)
+        InstallValidation   = "C:\Program Files\Path\To.exe" # Location to check for when done downloading file. (optional - set to $null if not using) [Also checks Version if specified]
+        $Version            = [version]::Parse("1.0.0.0") # Windows .exe file version. (optional - set to $null if not using)
     }
 );
 
@@ -172,7 +172,7 @@ function Test-FileHash {
 }
 
 
-function Get-FileFromURL {
+function Start-DownloadFile {
     param (
         [string]$DownloadURL,
         [string]$DownloadHash,
@@ -181,8 +181,10 @@ function Get-FileFromURL {
 
     if (($null -eq $DownloadURL) -or ($null -eq $DownloadDest)) {
         Invoke-WebRequest -Uri "$DownloadURL" -OutFile "$DownloadDest";
-        if (Test-FileHash -FilePath "$DownloadDest" -ExpectedHash "$DownloadHash") { return $true; }
-        else { return $false; }
+        if (-not (Test-FileHash -FilePath "$DownloadDest" -ExpectedHash "$DownloadHash")) {
+            Write-Output "Failed to download $DownloadURL!";
+            exit 1;
+        }
     }
 }
 
@@ -228,21 +230,22 @@ if ($Uninstall -or $Reinstall) {
 
 
 # INSTALLATION BEGIN
-# Check if applications are installed before doing anything.
-
+# Check if applications are installed before doing anything, build an array of missing applications.
+$ToBeInstalled = @();
 foreach ($Installer in $Installers) {
     if ($Force) {
-        Install-Application -FilePath $Installer.FileDest -FileSwitches $Installer.InstallSwitch;
+        $ToBeInstalled += $Installer;
     } else {
         $VersionInstalled = Test-IsInstalled -Inst $Installer;
         $CurName = $Installer.AppName;
         if ($null -eq $VersionInstalled) {
             Write-Output "$CurName not installed.";
-            Install-Application -FilePath $Installer.FileDest -FileSwitches $Installer.InstallSwitch;
+            $ToBeInstalled += $Installer;
         } elseif (Test-InstallerIsNewer -InstalledVersion $VersionInstalled -AppVersion $Installer.Version) {
             if (-not $InstallMissing) {
                 Write-Output "$CurName installer is newer than current version.";
-                Install-Application -FilePath $Installer.FileDest -FileSwitches $Installer.InstallSwitch;
+                $ToBeInstalled += $Installer;
+                #
             } else {
                 $VersionInstalledStr = $VersionInstalled.FileVersion;
                 Write-Output "$CurName is already installed as version $VersionInstalledStr, skipping as InstallMissing switch is specified.";
@@ -252,3 +255,20 @@ foreach ($Installer in $Installers) {
         }
     }
 }
+
+# If applications are missing and need to be installed, download them first.
+if ($ToBeInstalled.Count -gt 0) {
+    foreach ($Addition in $AdditionalFiles) { # Download additional files first.
+        Start-DownloadFile -DownloadURL $Addition.SourceURL -DownloadHash $Addition.SourceHash -DownloadDest $Addition.FileDest;
+    }
+    foreach ($Installer in $ToBeInstalled) {
+        if ($null -ne $Installer.SourceURL) { # Download main files next.
+            Start-DownloadFile -DownloadURL $Installer.SourceURL -DownloadHash $Installer.SourceHash -DownloadDest $Installer.FileDest;
+        }
+    }
+    foreach ($Installer in $Installers) { # Run installers for main files.
+        Install-Application -FilePath $Installer.FileDest -FileSwitches $Installer.InstallSwitch;
+    }
+}
+
+# Install applications.
